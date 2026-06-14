@@ -8,7 +8,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const auth = new google.auth.GoogleAuth({ 
-    keyFile: 'credentials.json', 
+   credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
     scopes: ['https://www.googleapis.com/auth/spreadsheets'] 
 });
 const SPREADSHEET_ID = '1Tq9oTlChu9IqIumy3G814-_VjYhADDKypv4_kXkLMrg';
@@ -29,7 +29,7 @@ function calcularPuntos(usuario, partidos, pronosticos) {
 }
 
 // --- Endpoints ---
-app.post('/api/login', async (req, res) => {E
+app.post('/api/login', async (req, res) => {
     const { usuario, password } = req.body;
     const sheets = google.sheets({ version: 'v4', auth: await auth.getClient() });
     const response = await sheets.spreadsheets.values.get({ spreadsheetId: SPREADSHEET_ID, range: 'Usuarios!A:B' });
