@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiniela Pro 2026</title>
+    <style>
+        :root { --gold: #eab308; --bg: #cbd5e1; --border: #0f172a; }
+        body { font-family: 'Verdana', sans-serif; background: var(--bg); padding: 20px; }
+        #auth-container { max-width: 450px; margin: 40px auto; background: white; padding: 30px; border: 6px solid var(--border); box-shadow: 10px 10px 0px rgba(0,0,0,0.2); text-align: center; }
+        input { width: 90%; margin: 8px 0; padding: 12px; border: 2px solid #cbd5e1; text-align: center; font-size: 1rem; }
+        button { width: 95%; padding: 12px; background: var(--gold); border: none; font-weight: bold; cursor: pointer; text-transform: uppercase; margin-top:5px; }
+        .card { background: #f1f5f9; padding: 25px; border: 3px solid #64748b; max-width: 950px; margin: auto; }
+        .grupo-container { display: grid; grid-template-columns: 1fr 280px; gap: 20px; background: white; padding: 20px; margin-bottom: 25px; border: 2px solid #94a3b8; align-items: start; }
+        .partido { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; background: #f8fafc; padding: 10px; margin-bottom: 5px; border: 1px solid #e2e8f0; }
+        .partido input { width: 40px; padding: 6px; border: 2px solid var(--gold); font-weight: bold; }
+        .tabla-pos { width: 100%; border-collapse: collapse; font-size: 0.8rem; text-align: center; }
+        .tabla-pos th { background: var(--border); color: white; padding: 8px; }
+        .tabla-pos td { border: 1px solid #e2e8f0; padding: 8px; }
+        .ranking-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
+        .ranking-table th { background: var(--border); color: white; padding: 8px; }
+        .ranking-table td { border: 1px solid #cbd5e1; padding: 8px; }
+    </style>
+</head>
+<body>
+    <div id="auth-container">
+        <h2 style="border-bottom:4px solid var(--gold); padding-bottom:10px;">QUINIE LA 2026</h2>
+        <input id="u" placeholder="USUARIO">
+        <input id="p" type="password" placeholder="CLAVE">
+        <button onclick="login()">ENTRAR</button>
+        <button onclick="registrar()" style="background:transparent; border:1px solid #000; margin-top:10px;">REGISTRARSE</button>
+        <h3>RANKING GENERAL</h3>
+        <table class="ranking-table"><tbody id="ranking-body"></tbody></table>
+    </div>
+    <div id="app" class="card" style="display:none;">
+        <h2 id="user-display"></h2><div id="lista-partidos"></div>
+        <button onclick="location.reload()" style="background:#64748b; color:white; border:none; padding:10px; width:100%; cursor:pointer;">SALIR</button>
+    </div>
+    <script>
+        let logUser = "";
+        async function login() {
+            const u = document.getElementById('u').value, p = document.getElementById('p').value;
+            const res = await fetch('/api/login', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({usuario:u, password:p}) });
+            const data = await res.json();
+            if(data.valido) { logUser = u; document.getElementById('auth-container').style.display='none'; document.getElementById('app').style.display='block'; cargar(); }
+            else alert("Datos incorrectos");
+        }
+        async function registrar() {
+            const u = document.getElementById('u').value, p = document.getElementById('p').value;
+            const res = await fetch('/api/registro', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({usuario:u, password:p}) });
+            const data = await res.json();
+            alert(data.success ? "Registrado" : data.message);
+        }
+        async function cargar() {
+            const res = await fetch('/api/partidos?usuario='+encodeURIComponent(logUser));
+            const { partidos, totalUsuario, tablas } = await res.json();
+            document.getElementById('user-display').innerText = `${logUser.toUpperCase()} | Pts: ${totalUsuario}`;
+            const div = document.getElementById('lista-partidos'); div.innerHTML = "";
+            const grupos = {}; partidos.forEach(p => { if(!grupos[p.grupo]) grupos[p.grupo] = []; grupos[p.grupo].push(p); });
+            for(const g in grupos) {
+                let htmlPart = grupos[g].map(p => `<div class="partido">
+                    <div style="overflow:hidden"><b>${p.eq1} vs ${p.eq2}</b><br><small>${p.fecha} | Real: ${p.res1 !== "" ? p.res1+'-'+p.res2 : '--'}</small></div>
+                    <div style="display:flex; gap:5px;">
+                        <input type="number" min="0" id="p1_${p.id}" value="${p.pron1}" onchange="guardar('${p.id}')">
+                        <input type="number" min="0" id="p2_${p.id}" value="${p.pron2}" onchange="guardar('${p.id}')">
+                    </div>
+                    <div style="width:45px; text-align:center; font-size:0.75rem"><b>${p.ptsPartido} Pts</b></div>
+                </div>`).join('');
+                let htmlTabla = `<table class="tabla-pos"><tr><th>Eq</th><th>PJ</th><th>DG</th><th>Pts</th></tr>` + 
+                    (tablas[g] || []).map(e => `<tr><td>${e.n}</td><td>${e.pj}</td><td>${e.dg}</td><td><b>${e.pts}</b></td></tr>`).join('') + `</table>`;
+                div.innerHTML += `<div class="grupo-container"><div><h3>${g}</h3>${htmlPart}</div><div><h3>TABLA</h3>${htmlTabla}</div></div>`;
+            }
+        }
+        async function guardar(id) {
+    let p1 = document.getElementById('p1_'+id), p2 = document.getElementById('p2_'+id);
+    if(p1.value < 0) p1.value = 0; if(p2.value < 0) p2.value = 0;
+    
+    // Guardamos la respuesta de la petición fetch
+    const res = await fetch('/api/guardar', { 
+        method:'POST', 
+        headers:{'Content-Type':'application/json'}, 
+        body:JSON.stringify({usuario:logUser, idPartido:id, pron1:p1.value, pron2:p2.value}) 
+    });
+    
+    // Convertimos la respuesta a JSON
+    const data = await res.json();
+    
+    // Si el backend responde con success: false, mostramos el mensaje en un alert
+    if (!data.success) {
+        alert(data.message);
+    }
+    
+    // Volvemos a cargar los datos. Esto también sirve para revertir el número 
+    // en pantalla al último guardado si el backend rechazó el cambio.
+    cargar();
+}
+        window.onload = async () => {
+            const res = await fetch('/api/ranking');
+            const data = await res.json();
+            document.getElementById('ranking-body').innerHTML = data.map((u, i) => `<tr><td>${i+1}</td><td>${u.usuario}</td><td>${u.puntos}</td></tr>`).join('');
+        };
+    </script>
+</body>
+</html>
